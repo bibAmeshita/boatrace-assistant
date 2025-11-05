@@ -1,0 +1,246 @@
+<h2>本日の全レース</h2>
+<button id="fetchAll">全てのレース取得</button>
+
+<pre id="allOutput"></pre>
+
+<div id="loading" style="display:none;">
+    🔄 取得中...
+</div>
+
+<div id="raceForm" style="display:none; margin-top:20px;">
+    <form id="predictionForm">
+
+        <!-- ▼レース選択 -->
+        <label>レース</label>
+        <select id="raceSelect">
+            <option value="">レースを選択してください</option>
+        </select>
+
+        <input type="hidden" id="place">
+        <input type="hidden" id="title">
+        <input type="hidden" id="race">
+        <input type="hidden" id="deadline">
+        <input type="hidden" id="raceUrl">
+        <input type="hidden" id="date">
+        <br><br>
+
+        <!-- ▼キャラクター -->
+        <label>キャラクター</label>
+        <select id="characterSelect">
+            <option value="">選択してください</option>
+            {% for c in characters %}
+            <option value="{{ c.id }}" data-tone="{{ c.tone }}" data-prediction="{{ c.prediction }}"
+                data-index="{{ c.index }}">
+                {{ c.name }}
+            </option>
+            {% endfor %}
+        </select>
+
+        <input type="hidden" name="tone" id="charTone">
+        <input type="hidden" name="prediction" id="charPrediction">
+        <input type="hidden" name="index" id="charIndex">
+        <br><br>
+
+        <!-- ▼式別 -->
+        <label>式別</label>
+        <select id="betType" name="betType">
+            <option value="" selected disabled>選択してください</option>
+            <option value="win">単勝</option>
+            <option value="place">複勝</option>
+            <option value="exacta">2連単</option>
+            <option value="quinella">2連複</option>
+            <option value="trifecta">3連単</option>
+            <option value="trio">3連複</option>
+        </select>
+        <br><br>
+
+        <!-- ▼方式 -->
+        <label>方式</label>
+        <select id="method" name="method">
+            <option value="" selected disabled>選択してください</option>
+            <option value="normal">通常</option>
+            <option value="1axle">1艇軸流し</option>
+            <option value="2axle">2艇軸流し</option>
+            <option value="3box">3艇ボックス</option>
+            <option value="4box">4艇ボックス</option>
+            <option value="5box">5艇ボックス</option>
+        </select>
+        <br><br>
+
+        <!-- ▼点数 -->
+        <label>購入点数</label>
+        <input id="pointsInput" name="points" type="number" placeholder="例: 5">
+        <div id="pointInfo" style="margin-top:5px;color:#555;">方式を選んでください</div>
+        <br><br>
+
+        <!-- ▼キャラクター hidden -->
+        <input type="hidden" id="charaStyle" name="charaStyle">
+        <input type="hidden" id="charaPrediction" name="charaPrediction">
+        <input type="hidden" id="charaIndex" name="charaIndex">
+
+        <button type="submit">予想する</button>
+
+    </form>
+</div>
+
+<script>
+
+    // ========================
+    // 全レース取得（localStorage キャッシュ）
+    // ========================
+    document.getElementById("fetchAll").addEventListener("click", async () => {
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const cacheKey = `races_${todayKey}`;
+        let data = localStorage.getItem(cacheKey);
+
+        if (data) {
+            console.log("✅ localStorage から読み込み");
+            data = JSON.parse(data);
+        } else {
+            console.log("⚡ APIから取得中...");
+            document.getElementById("loading").style.display = "block";
+            const res = await fetch("/all_races_today/");
+            data = await res.json();
+            document.getElementById("loading").style.display = "none";
+
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+            console.log("✅ localStorage に保存済み");
+        }
+
+        setupRaceOptions(data);
+    });
+
+    // ========================
+    // 方式による点数説明
+    // ========================
+    document.getElementById("method").addEventListener("change", e => {
+        const msg = {
+            normal: "自由に入力できます",
+            "1axle": "1艇軸流し：最低1点〜最大5点",
+            "2axle": "2艇軸流し：最低2点〜最大6点",
+            "3box": "3艇ボックス：3点固定",
+            "4box": "4艇ボックス：6点固定",
+            "5box": "5艇ボックス：10点固定",
+        }[e.target.value];
+
+        document.getElementById("pointInfo").textContent = msg;
+
+        if (e.target.value.includes("box")) {
+            const fixed = { "3box": 3, "4box": 6, "5box": 10 }[e.target.value];
+            document.getElementById("pointsInput").value = fixed;
+            document.getElementById("pointsInput").readOnly = true;
+        } else {
+            document.getElementById("pointsInput").readOnly = false;
+            document.getElementById("pointsInput").value = "";
+        }
+    });
+
+    // ========================
+    // キャラ選択：hiddenにセット
+    // ========================
+    document.getElementById("characterSelect").addEventListener("change", function () {
+        const opt = this.selectedOptions[0];
+        document.getElementById("charTone").value = opt.dataset.tone || "";
+        document.getElementById("charPrediction").value = opt.dataset.prediction || "";
+        document.getElementById("charIndex").value = opt.dataset.index || "";
+    });
+
+    // ========================
+    // レース選択：hiddenにセット
+    // ========================
+    document.getElementById("raceSelect").addEventListener("change", () => {
+        const v = document.getElementById("raceSelect").value;
+        if (!v) return;
+
+        const d = JSON.parse(v);
+        document.getElementById("place").value = d.place;
+        document.getElementById("title").value = d.title;
+        document.getElementById("race").value = d.race;
+        document.getElementById("deadline").value = d.time;
+        document.getElementById("raceUrl").value = d.url;
+        document.getElementById("date").value = new Date().toISOString().slice(0, 10);
+    });
+
+    // ========================
+    // 予想フォーム submit
+    // ========================
+    document.getElementById("predictionForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const betTypeMap = {
+            win: "単勝", place: "複勝", exacta: "2連単", quinella: "2連複",
+            trifecta: "3連単", trio: "3連複",
+        };
+
+        const methodMap = {
+            normal: "通常", "1axle": "1軸流し", "2axle": "2軸流し",
+            "3box": "3艇ボックス", "4box": "4艇ボックス", "5box": "5艇ボックス",
+        };
+
+        const data = {
+            place: document.getElementById("place").value,
+            title: document.getElementById("title").value,
+            race: document.getElementById("race").value,
+            deadline: document.getElementById("deadline").value,
+            raceUrl: document.getElementById("raceUrl").value,
+            character: document.querySelector("#characterSelect option:checked").textContent.trim(),
+            charTone: document.getElementById("charTone").value,
+            charPrediction: document.getElementById("charPrediction").value,
+            charIndex: document.getElementById("charIndex").value,
+            betType: betTypeMap[document.getElementById("betType").value],
+            method: methodMap[document.getElementById("method").value],
+            points: document.getElementById("pointsInput").value,
+        };
+
+        // console.table(data);
+
+        sendPrediction(data);
+    });
+
+    async function sendPrediction(data) {
+
+        // ① レース詳細取得
+        const detail = await fetch("/today_race_detail/save/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+        const raceJson = await detail.json();
+
+        // ② 予測（スコア付与 & 保存）
+        const res = await fetch("/race_predict/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(raceJson),
+        });
+        const finalJson = await res.json();
+
+        console.log("✅ 完全版データ:", finalJson);
+        alert("保存しました！");
+    }
+
+    // ========================
+    // レース選択肢反映
+    // ========================
+    function setupRaceOptions(data) {
+        document.getElementById("allOutput").textContent = JSON.stringify(data, null, 2);
+
+        const raceSelect = document.getElementById("raceSelect");
+        raceSelect.innerHTML = `<option value="">レースを選択してください</option>`;
+
+        data.forEach(site => {
+            site.races.forEach(r => {
+                const opt = document.createElement("option");
+                opt.value = JSON.stringify({
+                    place: site.place, title: site.title,
+                    race: r.rno, time: r.time, url: r.url
+                });
+                opt.textContent = `${site.place} ${r.rno} (${r.time})`;
+                raceSelect.appendChild(opt);
+            });
+        });
+
+        document.getElementById("raceForm").style.display = "block";
+    }
+
+</script>

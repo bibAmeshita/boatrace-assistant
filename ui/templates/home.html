@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}ホームページ{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-50">
+    {% block content %}
+    <header class="bg-blue-900 p-6">
+        <h1 class="text-2xl font-bold">BT</h1>
+    </header>
+    <nav class="flex gap-8 bg-gray-800 p-6">
+        <a href="/" class="bg-gray-200 p-3" href>ダッシュボード</a>
+        <a href="/prediction-1" class="bg-gray-200 p-3" href>予想1</a>
+        <a href="/config" class="bg-gray-200 p-3" href>設定</a>
+    </nav>
+    <main class="p-6">
+        Home
+    </main>
+
+    {% endblock %}
+</body>
+
+</html>

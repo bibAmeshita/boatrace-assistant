@@ -1,0 +1,12 @@
+{
+  "name": "boatrace-assistant",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "web",
+  "workspaceFolder": "/app",
+  "customizations": {
+    "settings": {
+      "python.defaultInterpreterPath": "/usr/local/bin/python"
+    },
+    "extensions": ["ms-python.python", "ms-azuretools.vscode-docker"]
+  }
+}

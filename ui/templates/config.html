@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>設定</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-50">
+    <header class="bg-blue-900 p-6">
+        <h1 class="text-2xl font-bold">BT</h1>
+    </header>
+    <nav class="flex gap-8 bg-gray-800 p-6">
+        <a href="/" class="bg-gray-200 p-3" href>ダッシュボード</a>
+        <a href="/prediction-1" class="bg-gray-200 p-3" href>予想1</a>
+        <a href="/config" class="bg-gray-200 p-3" href>設定</a>
+    </nav>
+    <main class="p-6">
+        <div class="max-w-5xl mx-auto">
+
+            <h1 class="text-2xl font-bold mb-12">設定画面</h1>
+
+            <!-- 番組設定 -->
+            <div class="border rounded p-6 mb-12 bg-gray-100">
+                <h2 class="text-xl font-semibold mb-3">番組設定</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="flex justify-between gap-8 items-center mb-3">
+
+                        <input type="text" name="name" placeholder="番組名を入力" class="border rounded p-2 w-10/12 h-12"
+                            value="{{ program.name|default:'' }}">
+
+
+                        <button type="submit" name="program_save"
+                            class="bg-blue-500 text-white px-3 py-2 rounded grow">保存</button>
+
+                    </div>
+                </form>
+            </div>
+
+            <!-- キャラクター一覧 -->
+            <div class="border rounded px-6 pt-6 pb-4 mb-12 bg-gray-100">
+                <!-- キャラクター一覧 -->
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-xl font-semibold">キャラクター</h2>
+                    <button onclick="openCharacterModal()"
+                        class="bg-green-500 text-white  px-3 py-2 rounded">＋追加</button>
+                </div>
+
+                {% for c in characters %}
+                <div class="flex gap-8 w-full justify-between border rounded items-center mb-2 bg-white">
+                    <div class="p-3">
+                        {{ c.name }}
+                    </div>
+                    <div class="p-3">
+                        <button class="bg-blue-500 text-white px-2 py-1 rounded open-char-btn" data-id="{{ c.id }}"
+                            data-name="{{ c.name }}" data-tone="{{ c.tone }}" data-prediction="{{ c.prediction }}"
+                            data-index="{{ c.index }}">
+                            編集
+                        </button>
+                        <form method="post" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="id" value="{{ c.id }}">
+                            <button name="character_delete" class="bg-red-500 text-white px-2 py-1 rounded">削除</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- テンプレート一覧 -->
+            <div class="border rounded px-6 pt-6 pb-4 mb-12 bg-gray-100">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-xl font-semibold">テンプレート</h2>
+                    <button onclick="openTemplateModal()" class="bg-green-500 text-white px-3 py-2 rounded">＋追加</button>
+                </div>
+
+                {% for t in templates %}
+                <div class="flex justify-between gap-8 w-full border rounded items-center mb-2 bg-white">
+                    <div class="p-3">{{ t.name }}</div>
+                    <div class="p-3">
+                        <button class="bg-blue-500 text-white px-2 py-1 rounded open-temp-btn" data-id="{{ t.id }}"
+                            data-name="{{ t.name }}" data-tag="{{ t.tag }}" data-content="{{ t.content }}">
+                            編集
+                        </button>
+                        <form method="post" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="id" value="{{ t.id }}">
+                            <button name="template_delete" class="bg-red-500 text-white px-2 py-1 rounded">削除</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- キャラクターモーダル -->
+            <div id="characterModal"
+                class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
+                <div class="bg-white p-6 rounded shadow-lg w-96 relative">
+                    <button onclick="closeModal('characterModal')"
+                        class="absolute top-2 right-3 text-gray-600 text-xl">&times;</button>
+                    <h2 class="text-lg font-bold mb-4">キャラクター編集</h2>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="id" id="charId">
+                        <label>名前</label><input type="text" name="name" id="charName"
+                            class="w-full border p-2 mb-2 rounded">
+                        <label>口調</label><textarea name="tone" id="charTone"
+                            class="w-full border p-2 mb-2 rounded"></textarea>
+                        <label>予想</label><textarea name="prediction" id="charPred"
+                            class="w-full border p-2 mb-2 rounded"></textarea>
+                        <label>指数</label><input type="text" name="index" id="charIndex"
+                            class="w-full border p-2 mb-2 rounded">
+                        <div class="flex justify-end gap-3 mt-4">
+                            <button type="button" class="px-3 py-2 bg-gray-300 rounded"
+                                onclick="closeModal('characterModal')">閉じる</button>
+                            <button type="submit" name="character_save"
+                                class="px-3 py-2 bg-blue-500 text-white rounded">保存</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- テンプレートモーダル -->
+            <div id="templateModal"
+                class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
+                <div class="bg-white p-6 rounded shadow-lg w-96 relative">
+                    <button onclick="closeModal('templateModal')"
+                        class="absolute top-2 right-3 text-gray-600 text-xl">&times;</button>
+                    <h2 class="text-lg font-bold mb-4">テンプレート編集</h2>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="id" id="tempId">
+                        <label>名前</label><input type="text" name="name" id="tempName"
+                            class="w-full border p-2 mb-2 rounded">
+                        <label>タグ</label><input type="text" name="tag" id="tempTag"
+                            class="w-full border p-2 mb-2 rounded">
+                        <label>内容</label><textarea name="content" id="tempContent"
+                            class="w-full border p-2 mb-2 rounded"></textarea>
+                        <div class="flex justify-end gap-3 mt-4">
+                            <button type="button" class="px-3 py-2 bg-gray-300 rounded"
+                                onclick="closeModal('templateModal')">閉じる</button>
+                            <button type="submit" name="template_save"
+                                class="px-3 py-2 bg-blue-500 text-white rounded">保存</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script>
+        function openCharacterModal(id = null, name = '', tone = '', prediction = '', index = '') {
+            document.getElementById('charId').value = id || '';
+            document.getElementById('charName').value = name || '';
+            document.getElementById('charTone').value = tone || '';
+            document.getElementById('charPred').value = prediction || '';
+            document.getElementById('charIndex').value = index || '';
+            document.getElementById('characterModal').classList.remove('hidden');
+        }
+
+        function openTemplateModal(id = null, name = '', tag = '', content = '') {
+            document.getElementById('tempId').value = id || '';
+            document.getElementById('tempName').value = name || '';
+            document.getElementById('tempTag').value = tag || '';
+            document.getElementById('tempContent').value = content || '';
+            document.getElementById('templateModal').classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // キャラ編集ボタン
+            document.querySelectorAll('.open-char-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.dataset.id;
+                    const name = btn.dataset.name;
+                    const tone = btn.dataset.tone;
+                    const prediction = btn.dataset.prediction;
+                    const index = btn.dataset.index;
+                    openCharacterModal(id, name, tone, prediction, index);
+                });
+            });
+
+            // テンプレ編集ボタン
+            document.querySelectorAll('.open-temp-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.dataset.id;
+                    const name = btn.dataset.name;
+                    const tag = btn.dataset.tag;
+                    const content = btn.dataset.content;
+                    openTemplateModal(id, name, tag, content);
+                });
+            });
+
+            // 「＋追加」ボタン
+            document.getElementById('addCharBtn').addEventListener('click', () => openCharacterModal());
+            document.getElementById('addTempBtn').addEventListener('click', () => openTemplateModal());
+        });
+    </script>
+
+</html>
