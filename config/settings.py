@@ -23,7 +23,7 @@ SECRET_KEY = 'django-insecure-o^k3vu1a($5q5q5%@-lizx8gc-q7m!f^#9rpwkm(u6d6j#luy6
 #DEBUG = os.getenv("DEBUG", "0") == "1"
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'boatrace-single-112019512723.asia-east1.run.app']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'boatrace-assistant-727475916407.europe-west1.run.app']
 
 
 # Application definition
