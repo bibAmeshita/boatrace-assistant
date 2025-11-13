@@ -1,0 +1,135 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>ホームページ</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="{% static 'ui/editor.js' %}"></script>
+</head>
+
+<body class="bg-gray-50">
+
+    <header class="bg-blue-900 p-6">
+        <h1 class="text-2xl font-bold">BT</h1>
+    </header>
+    <nav class="flex gap-8 bg-gray-800 p-6">
+        <a href="/" class="bg-gray-200 p-3" href>ダッシュボード</a>
+        <a href="/prediction-1" class="bg-gray-200 p-3" href>事前予想</a>
+        <a href="/prediction-2" class="bg-gray-200 p-3" href>直前予想</a>
+        <a href="/report" class="bg-gray-200 p-3" href>予想結果</a>
+        <a href="/result" class="bg-gray-200 p-3" href>結果画面作成</a>
+        <a href="/media" class="bg-gray-200 p-3" href>メディア</a>
+        <a href="/config" class="bg-gray-200 p-3" href>設定</a>
+    </nav>
+    <main class="p-6">
+        <h2 class="text-xl font-semibold mb-4">新しい結果を追加</h2>
+
+        <form method="POST" class="mb-8 bg-white p-4 rounded shadow">
+            {% csrf_token %}
+            <div class="mb-4">
+                <label class="block font-semibold mb-2">キー名:</label>
+                {{ form.key_name }}
+            </div>
+            <div class="mb-4">
+                <label class="block font-semibold mb-2">タイトル:</label>
+                {{ form.title }}
+            </div>
+            <div class="mb-4">
+                <label class="block font-semibold mb-2">本文:</label>
+                {{ form.body }}
+            </div>
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                登録
+            </button>
+        </form>
+
+        <h2 class="text-xl font-semibold mb-4">登録済みリスト</h2>
+        <div class="space-y-4">
+            {% for item in items %}
+            <div class="bg-white p-4 rounded shadow">
+                <h3 class="font-bold text-lg">{{ item.title }}</h3>
+                <p class="text-sm text-gray-500">キー名: {{ item.key_name }}</p>
+                <!--p class="mt-2 text-gray-700 whitespace-pre-line">{{ item.body }}</p-->
+                <button class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 open-edit-btn"
+                    data-id="{{ item.id }}" + data-key_name="{{ item.key_name }}" + data-title="{{ item.title }}"
+                    data-body="{{ item.body }}">
+                    編集
+                </button>
+                <form method="POST" action="{% url 'delete_result' item.pk %}" class="mt-2">
+                    {% csrf_token %}
+                    <button type="submit" class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">
+                        削除
+                    </button>
+                </form>
+            </div>
+            {% empty %}
+            <p>まだ結果が登録されていません。</p>
+            {% endfor %}
+        </div>
+
+        <div id="editModal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
+            <div class="bg-white p-6 rounded shadow-lg w-96 relative">
+                <button onclick="closeModal('editModal')"
+                    class="absolute top-2 right-3 text-gray-600 text-xl">&times;</button>
+                <h2 class="text-lg font-bold mb-4">結果を編集</h2>
+                <form method="POST" action="{% url 'result' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="id" id="editId">
+                    <div class="mb-3">
+                        <label class="block font-semibold mb-1">キー名:</label>
+                        <input type="text" name="key_name" id="editKeyName" class="w-full border p-2 rounded">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block font-semibold mb-1">タイトル:</label>
+                        <input type="text" name="title" id="editTitle" class="w-full border p-2 rounded">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block font-semibold mb-1">本文:</label>
+                        <textarea name="body" id="editBody" class="richtext w-full border p-2 rounded"></textarea>
+                    </div>
+                    <div class="flex justify-end gap-3 mt-4">
+                        <button type="button" onclick="closeModal('editModal')"
+                            class="px-3 py-2 bg-gray-300 rounded">閉じる</button>
+                        <button type="submit" name="result_update"
+                            class="px-3 py-2 bg-blue-500 text-white rounded">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            // 編集ボタンにクリックイベントを設定
+            document.querySelectorAll(".open-edit-btn").forEach((btn) => {
+                btn.addEventListener("click", function () {
+                    const id = this.dataset.id;
+                    const key = this.dataset.key_name;
+                    const title = this.dataset.title;
+                    const body = this.dataset.body;
+
+                    document.getElementById("editId").value = id;
+                    document.getElementById("editKeyName").value = key;
+                    document.getElementById("editTitle").value = title;
+                    document.getElementById("editBody").value = body;
+
+                    openModal("editModal");
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>
