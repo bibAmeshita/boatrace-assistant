@@ -20,8 +20,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-o^k3vu1a($5q5q5%@-lizx8gc-q7m!f^#9rpwkm(u6d6j#luy6'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG", "0") == "1"
-#DEBUG = True
+#DEBUG = os.getenv("DEBUG", "0") == "1"
+DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'boatrace-single-112019512723.asia-east1.run.app']
 
@@ -39,6 +39,8 @@ INSTALLED_APPS = [
     'today_races',
     'today_race_detail',
     'predictor_1',
+    'predictor_2',
+    'report',
 ]
 
 MIDDLEWARE = [
@@ -116,7 +118,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR / "ui" / "static",
+]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

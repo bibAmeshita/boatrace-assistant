@@ -2,24 +2,42 @@ from django.http import JsonResponse, HttpResponseBadRequest
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from django.http import JsonResponse
-from ui.models import Character
+import json
+from datetime import date
+from .models import DailyRaceCache
+import logging
+logger = logging.getLogger(__name__)
 
 INDEX_URL = "https://www.boatrace.jp/owpc/pc/race/index"
 BASE = "https://www.boatrace.jp"
 
-def fetch_today_sites(request):
 
+# 🏁 今日の全レース取得（localStorage側でキャッシュ）
+def all_races_today(request):
     if request.method != "GET":
         return HttpResponseBadRequest("GET only")
 
-    res = requests.get(INDEX_URL, timeout=15)
+    from datetime import date
+    from .models import DailyRaceCache
+    import json
+
+    today = date.today()
+    cache = DailyRaceCache.objects.first()
+
+    # ✅ 既存キャッシュがあって、今日ならそのまま返す
+    if cache and cache.date == today:
+        print("📦 今日のキャッシュを使用（再取得なし）")
+        sites = json.loads(cache.json_text)
+        return JsonResponse(sites, safe=False)
+
+    # ⚡ ここから取得開始（キャッシュなし or 古い日付）
+    logger.info("🐍 boatrace.jp からデータ取得開始")
+
+    res = requests.get(INDEX_URL, timeout=20)
     res.encoding = "utf-8"
     soup = BeautifulSoup(res.text, "html.parser")
 
-    out = []
-
-    # tbodyごとに抽出
+    sites = []
     for tbody in soup.select(".table1 table > tbody"):
         try:
             place_img = tbody.select_one("tr td img[alt]")
@@ -27,127 +45,87 @@ def fetch_today_sites(request):
             if not place:
                 continue
 
-            title_a = tbody.select_one(
-                'td.is-alignL.is-fBold.is-p10-7 a[href*="/owpc/pc/race/raceindex"]'
-            )
+            title_a = tbody.select_one('td.is-alignL.is-fBold.is-p10-7 a[href*="/owpc/pc/race/raceindex"]')
             if not title_a:
                 continue
 
             title = title_a.get_text(strip=True)
             title_url = urljoin(BASE, title_a.get("href"))
+            # races = fetch_races_from_raceindex(title_url)
 
-            out.append({
+            # 🎯 テスト用：racesを空にする（ここがポイント）
+            races = []
+
+            sites.append({
                 "place": place,
                 "title": title,
                 "raceindex_url": title_url,
+                "races": races,
             })
-        except:
-            continue
+        except Exception as e:
+            print("Error parsing site:", e)
 
-    return JsonResponse(out, safe=False)
+    # ✅ 第一段階のJSON保存テスト
+    #json_text = json.dumps(sites, ensure_ascii=False, indent=2)
+    #with open("test_all_races_today.json", "w", encoding="utf-8") as f:
+    #    f.write(json_text)
 
-def fetch_race_list_api(request):
-    raceindex_url = request.GET.get("url")
-    if not raceindex_url:
-        return HttpResponseBadRequest("url param required")
 
-    print("🔥 fetch_race_list_api called:", raceindex_url)
-
-    races = fetch_races_from_raceindex(raceindex_url)
-    return JsonResponse(races, safe=False)
-
-def fetch_all_races_today_api(request):
-    # 1) 本日の開催地一覧を取得
-    sites = fetch_today_sites(request).content
-    import json
-    sites = json.loads(sites)
-
-    result = []
-
-    # 2) 各開催地についてレース一覧を取得
+    # ✅ 完全版取得開始
     for site in sites:
-        raceindex_url = site["raceindex_url"]
-        races = fetch_races_from_raceindex(raceindex_url)
+        try:
+            site["races"] = fetch_races_from_raceindex(site["raceindex_url"])
+            print(f"🏁 {site['place']}: {len(site['races'])} races 取得")
+        except Exception as e:
+            print(f"⚠️ {site['place']} のレース詳細取得に失敗: {e}")
 
-        result.append({
-            "place": site["place"],
-            "title": site["title"],
-            "raceindex_url": raceindex_url,
-            "races": races
-        })
+    # 💾 JSONをファイル保存（テスト用）
+    #json_text = json.dumps(sites, ensure_ascii=False, indent=2)
+    #with open("test_all_races_today_full.json", "w", encoding="utf-8") as f:
+    #    f.write(json_text)
 
-    return JsonResponse(result, safe=False)
 
-def fetch_all_races_today_api(request):
-    if request.method != "GET":
-        return HttpResponseBadRequest("GET only")
+    # 💾 DBに上書き（常に1件）
+    json_text = json.dumps(sites, ensure_ascii=False)
+    if cache:
+        cache.date = today
+        cache.json_text = json_text
+        cache.save(update_fields=["date", "json_text", "updated_at"])
+        #print(f"💾 既存データを上書き保存 ({today})")
+    else:
+        DailyRaceCache.objects.create(date=today, json_text=json_text)
+        #print(f"🆕 新規保存 ({today})")
 
-    # 今日の開催一覧を取得
-    sites = fetch_today_sites(request).content
-    import json
-    sites = json.loads(sites)
+    return JsonResponse(sites, safe=False)
 
-    result = []
-
-    for site in sites:
-        url = site.get("raceindex_url")
-        races = fetch_races_from_raceindex(url)  # レース一覧取得
-        site["races"] = races  # 合体
-        result.append(site)
-
-    return JsonResponse(result, safe=False)
 
 def fetch_races_from_raceindex(url):
     """各レース場のレース一覧（1R〜12R）を取得"""
-    res = requests.get(url)
+    res = requests.get(url, timeout=20)
     res.encoding = "utf-8"
     soup = BeautifulSoup(res.text, "html.parser")
 
     races = []
     rows = soup.select(".contentsFrame1_inner .table1 table tbody tr")
-
     for row in rows:
         try:
             rno = row.select_one("td.is-fBold a").text.strip()
             time = row.select_one("td:nth-of-type(2)").text.strip()
             racelist_link = row.select_one('ul.textLinks3 a[href*="racelist"]')
-
-            race_url = (
-                "https://www.boatrace.jp" + racelist_link["href"]
-                if racelist_link else None
-            )
+            race_url = urljoin(BASE, racelist_link["href"]) if racelist_link else None
 
             races.append({
                 "rno": rno,
                 "time": time,
-                "url": race_url
+                "url": race_url,
             })
         except Exception as e:
-            print("Error parsing row:", e)
+            print("Error parsing race:", e)
 
     return races
 
-def get_today_races():
-    url = "https://www.boatrace.jp/owpc/pc/race/index"
-    res = requests.get(url)
-    soup = BeautifulSoup(res.text, "html.parser")
-
-    races = []
-    for item in soup.select(".tab01_body a"):
-        title = item.text.strip()
-        href = item.get("href")
-        if href:
-            races.append({
-                "title": title,
-                "url": f"https://www.boatrace.jp{href}"
-            })
-
-    print("✅ get_today_races:", races)
-    return races
-
-def today_races_api(request):
-    return fetch_today_sites(request)
 
 def characters_api(request):
+    from ui.models import Character
     characters = list(Character.objects.values("id", "name", "tone", "prediction", "index"))
     return JsonResponse(characters, safe=False)

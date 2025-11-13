@@ -1,10 +1,14 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ja">
 
 <head>
     <meta charset="UTF-8">
-    <title>設定</title>
+    <title>ホームページ</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="{% static 'ui/editor.js' %}"></script>
 </head>
 
 <body class="bg-gray-50">
@@ -13,7 +17,11 @@
     </header>
     <nav class="flex gap-8 bg-gray-800 p-6">
         <a href="/" class="bg-gray-200 p-3" href>ダッシュボード</a>
-        <a href="/prediction-1" class="bg-gray-200 p-3" href>予想1</a>
+        <a href="/prediction-1" class="bg-gray-200 p-3" href>事前予想</a>
+        <a href="/prediction-2" class="bg-gray-200 p-3" href>直前予想</a>
+        <a href="/report" class="bg-gray-200 p-3" href>予想結果</a>
+        <a href="/result" class="bg-gray-200 p-3" href>結果画面作成</a>
+        <a href="/media" class="bg-gray-200 p-3" href>メディア</a>
         <a href="/config" class="bg-gray-200 p-3" href>設定</a>
     </nav>
     <main class="p-6">
@@ -137,7 +145,7 @@
                         <label>タグ</label><input type="text" name="tag" id="tempTag"
                             class="w-full border p-2 mb-2 rounded">
                         <label>内容</label><textarea name="content" id="tempContent"
-                            class="w-full border p-2 mb-2 rounded"></textarea>
+                            class="richtext w-full border p-2 mb-2 rounded"></textarea>
                         <div class="flex justify-end gap-3 mt-4">
                             <button type="button" class="px-3 py-2 bg-gray-300 rounded"
                                 onclick="closeModal('templateModal')">閉じる</button>
@@ -163,8 +171,24 @@
             document.getElementById('tempId').value = id || '';
             document.getElementById('tempName').value = name || '';
             document.getElementById('tempTag').value = tag || '';
-            document.getElementById('tempContent').value = content || '';
-            document.getElementById('templateModal').classList.remove('hidden');
+
+            const modal = document.getElementById('templateModal');
+            modal.classList.remove('hidden');
+
+            // Quill初期化が完了するまで少し待ってから本文をセット
+            let tries = 0;
+            const interval = setInterval(() => {
+                const quillEditor = modal.querySelector('.ql-editor');
+                if (quillEditor) {
+                    quillEditor.innerHTML = content || '';
+                    console.log('🪶 Quill本文反映:', (content || '').slice(0, 60));
+                    clearInterval(interval);
+                }
+                if (++tries > 20) {
+                    clearInterval(interval);
+                    console.warn('⚠️ Quillが見つからず本文を反映できませんでした');
+                }
+            }, 100);
         }
 
         function closeModal(id) {
@@ -196,8 +220,15 @@
             });
 
             // 「＋追加」ボタン
-            document.getElementById('addCharBtn').addEventListener('click', () => openCharacterModal());
-            document.getElementById('addTempBtn').addEventListener('click', () => openTemplateModal());
+            const addCharBtn = document.getElementById('addCharBtn');
+            if (addCharBtn) {
+                addCharBtn.addEventListener('click', () => openCharacterModal());
+            }
+
+            const addTempBtn = document.getElementById('addTempBtn');
+            if (addTempBtn) {
+                addTempBtn.addEventListener('click', () => openTemplateModal());
+            }
         });
     </script>
 

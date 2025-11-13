@@ -23,3 +23,22 @@ class Template(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class MediaItem(models.Model):
+    key_name = models.CharField(max_length=100, unique=True)
+    image = models.ImageField(upload_to='uploads/')
+    comment = models.TextField(blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.comment or "No comment"
+
+class ResultItem(models.Model):
+    key_name = models.CharField(max_length=100, unique=True)
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title or f"Result #{self.pk}"

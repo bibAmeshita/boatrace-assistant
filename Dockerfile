@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
 # Python 依存関係インストール
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN playwright install --with-deps chromium
 
 # アプリケーションのコード
 COPY . .

@@ -2,22 +2,38 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-
-from ui.views import home, config, prediction_1
+from ui.views import home, config, prediction_1,  prediction_2, media, delete_media, result, delete_result, report
 from today_races import views as tr_views
 from today_race_detail.views import get_race_detail
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # メイン画面
     path('', home, name='home'),
-    path('config', config, name='config'),
+
+    # メディア
+    path('media/', media, name='media'),
+    path('media/delete/<int:pk>/', delete_media, name='delete_media'),
+
+    # 結果
+    path('result/', result, name='result'),
+    path('result/delete/<int:pk>/', delete_result, name='delete_result'),
+
+    # 設定・予測
+    path('config/', config, name='config'),
     path('prediction-1/', prediction_1, name='prediction_1'),
-    path("today_races_api/", tr_views.fetch_today_sites, name="today_races_api"),
-    path("race_list_api/", tr_views.fetch_race_list_api, name="race_list_api"),
-    path("all_races_today/", tr_views.fetch_all_races_today_api, name="all_races_today_api"),
+    path('prediction-2/', prediction_2, name='prediction_2'),
+
+    # 🏁 今日のレース関連API（localStorage方式）
+    path("all_races_today/", tr_views.all_races_today, name="all_races_today"),
     path("characters_api/", tr_views.characters_api, name="characters_api"),
+
+    # 各アプリ include
     path("today_race_detail/", include("today_race_detail.urls")),
-    path("", include("predictor_1.urls")),
+    path("predictor_1/", include("predictor_1.urls")),
+    path("predictor_2/", include("predictor_2.urls")),
+    path("report/", include("report.urls")),
 ]
 
 if settings.DEBUG:
