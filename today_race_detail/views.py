@@ -1,3 +1,4 @@
+# today_race_detail/views.py
 import json, os
 from datetime import datetime
 from django.http import JsonResponse
@@ -9,6 +10,7 @@ from requests.adapters import HTTPAdapter, Retry
 from django.views.decorators.csrf import csrf_exempt
 from predictor_1.features import make_feature_table
 from predictor_2.features import make_feature_table_just
+from predictor_2.views import run_race_predict_logic
 
 from .extractors.race_meta import extract_race_meta_from_html
 from .extractors.entry_table_just import (
@@ -16,12 +18,14 @@ from .extractors.entry_table_just import (
     extract_weather_meta_from_html,
     extract_before_entries_from_html,
 )
-from predictor_2.features import make_feature_table_just
+
 from bs4 import BeautifulSoup
 
 # 事前予想の前処理
 @csrf_exempt
 def get_race_detail(request):
+    print(f"✅事前予想用の取得開始")
+
     if request.method != "POST":
         return JsonResponse({"error": "POSTだけです"}, status=400)
 
@@ -91,6 +95,8 @@ def get_race_detail(request):
 # 直前予想の前処理
 @csrf_exempt
 def get_race_detail_just(request):
+    print(f"✅直前予想用の取得開始")
+
     if request.method != "POST":
         return JsonResponse({"error": "POSTだけです"}, status=400)
 
@@ -161,14 +167,9 @@ def get_race_detail_just(request):
     # === 📦 全データ統合 ===
     output = {**posted, **trimmed_meta, **weather_meta, "entries": entries}
 
-    # === ✅ スコア付与 ===
-    context = {
-        "place": output.get("place"),
-        "distance": output.get("distance"),
-        "type": output.get("type"),
-    }
-    scored_entries = make_feature_table_just(output["entries"], context)
-    output["entries"] = scored_entries
+    # === ✅ スコア、買い目、コメント付与 ===
+    result = run_race_predict_logic(output)
+    return JsonResponse(result, safe=False)
 
     # === 💾 保存（スコア付き） ===
     save_dir = "data"
@@ -196,120 +197,3 @@ def _save_debug(name: str, data):
             f.write(data)
         else:
             json.dump(data, f, ensure_ascii=False, indent=2)
-
-from bs4 import BeautifulSoup
-
-def extract_before_entries_from_html(html: str):
-    soup = BeautifulSoup(html, "html.parser")
-
-    result = {}
-    table = soup.select_one(".is-w748")  # メインテーブル
-    if not table:
-        return {}
-
-    # 各艇（tbody単位）
-    tbodies = table.select("tbody.is-fs12")
-    for tbody in tbodies:
-        cells = tbody.select("td")
-        if not cells:
-            continue
-
-        try:
-            lane = int(cells[0].text.strip())
-        except Exception:
-            continue
-
-        weight = _t(cells[3])
-        adjust_weight = _t(cells[8]) if len(cells) > 8 else ""
-        exhibit_time = _t(cells[4])
-        tilt = _t(cells[5])
-        propeller = _t(cells[6])
-        parts_change = _parse_parts_change(cells[7])
-        last_result = _parse_last_result(tbody)
-
-        result[lane] = {
-            "weight": _to_float(weight),
-            "adjust_weight": _to_float(adjust_weight),
-            "exhibit_time": _to_float(exhibit_time),
-            "tilt": _to_float(tilt),
-            "propeller": propeller if propeller != " " else None,
-            "parts_change": parts_change,
-            "last_result": last_result,
-        }
-
-    # === スタート展示のSTと位置(left)解析 ===
-    tmp = {}
-    start_table = soup.select_one(".is-w238")
-    if start_table:
-        for div in start_table.select(".table1_boatImage1"):
-            num_tag = div.select_one(".table1_boatImage1Number")
-            if not num_tag:
-                continue
-            lane = int(num_tag.text.strip())
-
-            st_tag = div.select_one(".table1_boatImage1Time")
-            st = _to_float(st_tag.text.strip()) if st_tag else None
-
-            boat_tag = div.select_one(".table1_boatImage1Boat")
-            left = None
-            if boat_tag and "style" in boat_tag.attrs:
-                style = boat_tag["style"]
-                if "left:" in style:
-                    left = float(style.split("left:")[1].split("%")[0])
-            tmp[lane] = {"st": st, "left": left}
-
-    # === left の昇順で course を決定 ===
-    sorted_lanes = sorted(
-        [(ln, v["left"]) for ln, v in tmp.items() if v["left"] is not None],
-        key=lambda x: x[1]
-    )
-    for i, (ln, _) in enumerate(sorted_lanes, start=1):
-        if ln in result:
-            result[ln]["course"] = i
-            result[ln]["st"] = tmp[ln]["st"]
-
-    # === 欠損補完 ===
-    for ln, info in result.items():
-        info.setdefault("weight", None)
-        info.setdefault("adjust_weight", None)
-        info.setdefault("exhibit_time", None)
-        info.setdefault("tilt", None)
-        info.setdefault("propeller", None)
-        info.setdefault("parts_change", None)
-        info.setdefault("last_result", None)
-        info.setdefault("course", None)
-        info.setdefault("st", None)
-
-    return result
-
-
-# --- 補助関数群 ---
-
-def _t(tag):
-    return tag.text.strip() if tag and tag.text else ""
-
-def _to_float(val):
-    try:
-        return float(val.replace("kg", "").replace("cm", "").replace("m", "").strip())
-    except Exception:
-        return None
-
-def _parse_parts_change(tag):
-    """部品交換欄"""
-    if not tag:
-        return None
-    items = [li.text.strip() for li in tag.select("li span") if li.text.strip()]
-    return items or None
-
-def _parse_last_result(tbody):
-    """前走成績欄 (R / 進入 / ST / 着順) を1行文字列でまとめる"""
-    rows = tbody.select("tr")
-    texts = []
-    for r in rows:
-        tds = r.select("td")
-        if not tds:
-            continue
-        row_text = " ".join(td.text.strip() for td in tds if td.text.strip())
-        if row_text:
-            texts.append(row_text)
-    return " ".join(texts) if texts else None

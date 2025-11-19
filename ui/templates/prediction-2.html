@@ -299,6 +299,7 @@
         sendPrediction(data);
     });
 
+
     async function sendPrediction(data) {
         //console.log("送信data:", data);
         // ① レース詳細取得
@@ -308,15 +309,16 @@
             body: JSON.stringify(data),
         });
         const raceJson = await detail.json();
-        //console.log("データ:", raceJson);
+        console.log("データ１:", raceJson);
 
         // ② 予測（スコア付与 & 保存）
         const res = await fetch("/predictor_2/race_predict/", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(raceJson),
-        });
+        }); s
         const finalJson = await res.json();
+        console.log("データ１:", finalJson);
 
         // ③ ダウンロードボタン表示
         const btn = document.createElement("button");

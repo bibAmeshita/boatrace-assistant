@@ -1,7 +1,9 @@
-#scraping/extractors/entry_table_just.py
+#today_race_detail/extractors/entry_table_just.py
 from __future__ import annotations
 from bs4 import BeautifulSoup
 import re
+import os
+
 
 # 全角→半角の置換テーブル（数字・ドット・マイナス・コロン・スペース・スラッシュ）
 ZEN2HAN = str.maketrans("０１２３４５６７８９．－：　／", "0123456789.-: /")
@@ -53,6 +55,7 @@ def _split_no_2r_3r(cell_text: str):
     return no, r2, r3
 
 def extract_entries_from_racelist_just_html(html: str) -> list[dict]:
+    print(f"👉直前情報得開始")
     """
     出走表（左ブロック）を全艇分抽出して返す。
 
@@ -170,113 +173,127 @@ def extract_entries_from_racelist_just_html(html: str) -> list[dict]:
     entries.sort(key=lambda x: (x.get("lane") if x.get("lane") is not None else 99))
     return entries
 
-def extract_before_entries_from_html(html: str) -> dict[int, dict]:
-    """
-    beforeinfo（直前情報）ページから以下を抽出:
-      - weight, adjust_weight, exhibit_time, tilt, propeller, parts_change, last_result
-      - course, st（右側のスタ展）
-    """
-    soup = BeautifulSoup(html, "lxml")
-    result = {}
 
-    # ===== 左のテーブル（体重・展示・チルト・部品・前走） =====
-    table = soup.select_one(".is-w748")
-    if table:
-        for tbody in table.select("tbody"):
-            lane_el = tbody.select_one("td.is-fs14")
-            lane = _to_int(_t(lane_el)) if lane_el else None
-            if not lane:
+def extract_before_entries_from_html(html: str):
+    print("👉スタート展示取得開始（左側＋右側まとめて抽出）")
+
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+
+        # -------------------------
+        # ① 左側テーブル抽出
+        # -------------------------
+        left = {}
+        table = soup.select_one(".is-w748")
+        if not table:
+            print("❌ .is-w748 テーブルが見つかりません")
+            return {}
+
+        tbodies = table.select("tbody.is-fs12")
+
+        for tbody in tbodies:
+            trs = tbody.find_all("tr")
+            if not trs:
                 continue
 
-            # 各項目
-            def _get_float(sel):
-                el = tbody.select_one(sel)
-                if not el:
-                    return None
-                text = _t(el)
-                m = re.search(r"-?\d+(?:\.\d+)?", text)
-                return float(m.group()) if m else None
+            first_tr = trs[0]
+            cells = first_tr.find_all("td")
 
-            weight = _get_float("tr:nth-of-type(1) > td[rowspan='2']")
-            adjust_weight = _get_float("tr:nth-of-type(3) > td[rowspan='2']")
-            exhibit_time = _get_float("td[rowspan='4']:nth-of-type(5)")
-            tilt = _get_float("td[rowspan='4']:nth-of-type(6)")
+            if len(cells) < 8:
+                continue
 
-            propeller = _t(tbody.select_one("td[rowspan='4']:nth-of-type(7)"))
-            propeller = None if not propeller or propeller == " " else propeller
+            lane = int(cells[0].text.strip())
+            weight = _t(cells[3])
+            exhibit_time = _t(cells[4])
+            tilt = _t(cells[5])
+            propeller = _t(cells[6])
+            parts_change = _parse_parts_change(cells[7])
+            last_result = None  # 今回は未使用
 
-            # 部品交換
-            parts_el = tbody.select_one("td.is-p5-5 ul.labelGroup1")
-            parts_change = None
-            if parts_el:
-                texts = [li.get_text(strip=True) for li in parts_el.select("li")]
-                parts_change = " ".join(texts) if texts else None
-
-            # 前走成績（R / 進入 / ST / 着順を連結）
-            rows = [r.find_all("td") for r in tbody.find_all("tr")]
-            last_result_parts = []
-            for r in rows:
-                for td in r:
-                    text = _t(td)
-                    if text and text not in ("&nbsp;", " "):
-                        last_result_parts.append(text)
-            last_result = " ".join(last_result_parts)
-
-            result[lane] = {
-                "weight": weight,
-                "adjust_weight": adjust_weight,
-                "exhibit_time": exhibit_time,
-                "tilt": tilt,
-                "propeller": propeller,
+            left[lane] = {
+                "weight": _to_float(weight),
+                "adjust_weight": None,
+                "exhibit_time": _to_float(exhibit_time),
+                "tilt": _to_float(tilt),
+                "propeller": propeller if propeller.strip() else None,
                 "parts_change": parts_change,
-                "last_result": last_result.strip() or None,
-                "course": None,
-                "st": None,
+                "last_result": last_result,
             }
 
-    # ===== 右側スタ展テーブル（course, st） =====
-    start_table = soup.select_one(".is-w238")
-    if start_table:
-        tmp = {}
-        for div in start_table.select(".table1_boatImage1"):
-            num_el = div.select_one(".table1_boatImage1Number")
-            lane = _to_int(_t(num_el)) if num_el else None
-            if not lane:
-                continue
+        # -------------------------
+        # ② 右側（ST・コース）抽出
+        # -------------------------
+        #print("👉右側 ST 抽出テスト開始")
 
-            st_el = div.select_one(".table1_boatImage1Time")
-            st = None
-            if st_el:
-                s = _t(st_el)
-                if s.startswith("."):
-                    s = "0" + s
-                try:
-                    st = float(s)
-                except ValueError:
-                    st = None
+        st_divs = soup.select("div.table1_boatImage1")
 
-            left_val = None
-            boat_el = div.select_one(".table1_boatImage1Boat")
-            if boat_el and boat_el.has_attr("style"):
-                m = re.search(r"left:\s*([\d.]+)%", boat_el["style"])
-                if m:
-                    left_val = float(m.group(1))
+        right = {}
 
-            tmp[lane] = {"left": left_val, "st": st}
+        for idx, div in enumerate(st_divs, start=1):
 
-        # left の昇順で course を決定
-        sorted_lanes = sorted(
-            [ (ln, v["left"]) for ln, v in tmp.items() if v["left"] is not None ],
-            key=lambda x: x[1]
-        )
-        for i, (ln, _) in enumerate(sorted_lanes, start=1):
-            if ln in result:
-                result[ln]["course"] = i
-                result[ln]["st"] = tmp[ln]["st"]
+            # 進入コース（色で決まる）
+            course = idx
 
-    return result
+            # ST 解析
+            spans = div.find_all("span")
+            time_tag = div.select_one(".table1_boatImage1Time")
+            st_raw = time_tag.get_text(strip=True) if time_tag else ""
+
+            parsed = parse_st_value(st_raw)
+
+            right[idx] = {
+                "course": course,
+                "st": parsed["st"],
+                "is_flying": parsed["is_flying"],
+                "is_late": parsed["is_late"],
+            }
+
+        # -------------------------
+        # ③ 左＋右を lane ごとに統合
+        # -------------------------
+        merged = {}
+
+        all_lanes = set(left.keys()) | set(right.keys())
+        for lane in sorted(all_lanes):
+            merged[lane] = {
+                **left.get(lane, {}),
+                **right.get(lane, {}),
+            }
+
+        #print("👉 最終 merged =", merged)
+
+        # -------------------------
+        # ④ merged の各 lane に exhibit_info をまとめる
+        # -------------------------
+        for lane, entry in merged.items():
+            entry["exhibit_info"] = {
+                "adjust_weight": entry.pop("adjust_weight", None),
+                "exhibit_time": entry.pop("exhibit_time", None),
+                "tilt": entry.pop("tilt", None),
+                "propeller": entry.pop("propeller", None),
+                "parts_change": entry.pop("parts_change", None),
+                "last_result": entry.pop("last_result", None),
+                "course": entry.pop("course", None),
+                "st": entry.pop("st", None),
+                "is_flying": entry.pop("is_flying", None),
+                "is_late": entry.pop("is_late", None),
+            }
+
+        return merged
+
+    except Exception as e:
+        import traceback
+        print("🚨 extract_before_entries_from_html 例外:", e)
+        traceback.print_exc()
+        return {}
+
+
+
+
 
 def extract_weather_meta_from_html(html: str):
+    print(f"👉水面気象報得開始")
+
     soup = BeautifulSoup(html, "html.parser")
 
     def _get_text(selector):
@@ -313,34 +330,40 @@ def get_relative_wind_label(wind_angle: int) -> dict:
     """
     wind_angle: is-wind1〜16（矢印方向＝風の吹く方向）
     戻り値:
-      relative_wind: 「追い風・右追い風・右横風・右向かい風・向かい風・左向かい風・左横風・左追い風」
-      relative_angle: 右進行を0°とした角度（例: 0=追い風、180=向かい風）
+      relative_wind: 風向き8方位のラベル
+      relative_angle: 右方向を0°とした角度
     """
     if not wind_angle:
         return {"relative_wind": None, "relative_angle": None}
 
-    # 22.5°単位の角度に変換
-    deg = (wind_angle - 1) * 22.5
-    from_deg = (deg + 180) % 360
-    relative_angle = (from_deg - 90) % 360  # 右方向を0°基準とする
+    # --- 角度計算（TO方向＝矢印の指す方向） ---
+    deg = (wind_angle - 1) * 22.5  # 0°=真上, 90°=右, 180°=下, 270°=左
+    relative_angle = (deg - 90) % 360  # 右向きを0°基準にする
 
-    # 8分割の風ラベル（45°刻み）
+    # --- 8方向ラベル ---
     if 337.5 <= relative_angle or relative_angle < 22.5:
-        label = "追い風"
+        label = "追い風（完全）"
+
     elif 22.5 <= relative_angle < 67.5:
-        label = "右追い風"
+        label = "斜め追い風（アウト→イン寄り）"
+
     elif 67.5 <= relative_angle < 112.5:
-        label = "右横風"
+        label = "横風（アウト→イン）"
+
     elif 112.5 <= relative_angle < 157.5:
-        label = "右向かい風"
+        label = "斜め向かい風（アウト→イン寄り）"
+
     elif 157.5 <= relative_angle < 202.5:
-        label = "向かい風"
+        label = "向かい風（完全）"
+
     elif 202.5 <= relative_angle < 247.5:
-        label = "左向かい風"
+        label = "斜め向かい風（イン→アウト寄り）"
+
     elif 247.5 <= relative_angle < 292.5:
-        label = "左横風"
+        label = "横風（イン→アウト）"
+
     else:
-        label = "左追い風"
+        label = "斜め追い風（イン→アウト寄り）"
 
     return {"relative_wind": label, "relative_angle": round(relative_angle, 1)}
 
@@ -354,3 +377,81 @@ def _extract_angle_from_class(el, prefix):
             if num.isdigit():
                 return int(num)
     return None
+
+
+def parse_st_value(st_raw: str | None):
+    """
+    STを float + フライング/出遅れフラグ に分解して返す
+
+    戻り値:
+      {
+        "st": float or None,
+        "is_flying": bool,
+        "is_late": bool,
+      }
+    """
+    if not st_raw:
+        return {"st": None, "is_flying": False, "is_late": False}
+
+    s = st_raw.strip()
+
+    # 文字による明示 ("フライング", "出遅れ")
+    if s == "フライング":
+        return {"st": None, "is_flying": True, "is_late": False}
+
+    if s == "出遅れ":
+        return {"st": None, "is_flying": False, "is_late": True}
+
+    is_flying = s.startswith("F")
+    is_late = s.startswith("L")
+
+    # F.03 → 0.03, L.02 → 0.02
+    if is_flying or is_late:
+        s = s[1:]  # F/L を取り除く
+
+    # ".04" → "0.04"
+    if s.startswith("."):
+        s = "0" + s
+
+    try:
+        st_value = float(s)
+    except:
+        st_value = None
+
+    return {
+        "st": st_value,
+        "is_flying": is_flying,
+        "is_late": is_late,
+    }
+
+
+def _t(tag):
+    return tag.text.strip() if tag and tag.text else ""
+
+
+def _to_float(val):
+    try:
+        return float(val.replace("kg", "").replace("cm", "").replace("m", "").strip())
+    except Exception:
+        return None
+
+
+def _parse_parts_change(tag):
+    """部品交換欄"""
+    if not tag:
+        return None
+    items = [li.text.strip() for li in tag.select("li span") if li.text.strip()]
+    return items or None
+
+def _parse_last_result(tbody):
+    """前走成績欄 (R / 進入 / ST / 着順) を1行文字列でまとめる"""
+    rows = tbody.select("tr")
+    texts = []
+    for r in rows:
+        tds = r.select("td")
+        if not tds:
+            continue
+        row_text = " ".join(td.text.strip() for td in tds if td.text.strip())
+        if row_text:
+            texts.append(row_text)
+    return " ".join(texts) if texts else None

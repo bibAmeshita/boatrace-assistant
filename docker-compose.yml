@@ -3,10 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    command:
-      - bash
-      - -lc
-      - python manage.py runserver 0.0.0.0:8000
+    command: python -u manage.py runserver 0.0.0.0:8000
     environment:
       DJANGO_SETTINGS_MODULE: config.settings
     ports:

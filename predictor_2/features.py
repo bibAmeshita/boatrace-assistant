@@ -239,6 +239,8 @@ def _make_context_bias(place: str | None, distance_text: str | None,
 
 # ===== メイン処理 =====
 def make_feature_table_just(entries: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
+    print("💥make_feature_table_just 開始")
+
     if not entries:
         return []
 
@@ -265,11 +267,30 @@ def make_feature_table_just(entries: List[Dict[str, Any]], context: Dict[str, An
     mot3, bot3 = [safe_val(e, "motor_3r") for e in entries], [safe_val(e, "boat_3r") for e in entries]
 
     # ===== 直前展示データ =====
-    exhibit_vals = [_to_float(e.get("exhibit_time"), 7.00, "exhibit_time") for e in entries]
-    tilt_vals = [_to_float(e.get("tilt"), 0.0, "tilt") for e in entries]
-    st_disp_vals = [_to_float(e.get("st"), 0.2, "st_display") for e in entries]
-    course_vals = [_to_float(e.get("course"), e.get("lane")) for e in entries]
-    adj_w_vals = [_to_float(e.get("adjust_weight"), 0.0, "adjust_weight") for e in entries]
+    exhibit_vals = [
+        _to_float(e.get("exhibit_info", {}).get("exhibit_time"), 7.00)
+        for e in entries
+    ]
+
+    tilt_vals = [
+        _to_float(e.get("exhibit_info", {}).get("tilt"), 0.0)
+        for e in entries
+    ]
+
+    st_disp_vals = [
+        _to_float(e.get("exhibit_info", {}).get("st"), 0.2)
+        for e in entries
+    ]
+
+    course_vals = [
+        _to_float(e.get("exhibit_info", {}).get("course"), e.get("lane"))
+        for e in entries
+    ]
+
+    adj_w_vals = [
+        _to_float(e.get("exhibit_info", {}).get("adjust_weight"), 0.0)
+        for e in entries
+    ]
 
     # ===== 正規化範囲 =====
     ln_lo, ln_hi = _safe_minmax(lanes)
@@ -344,11 +365,13 @@ def make_feature_table_just(entries: List[Dict[str, Any]], context: Dict[str, An
         ) * 100.0
 
         # ===== 展示スコア =====
-        f_ex = _norm_inverse(_to_float(e.get("exhibit_time"), 7.00), ex_lo, ex_hi)
-        f_tilt = 1 - min(abs(_to_float(e.get("tilt"), 0.0)) / 1.5, 1.0)
-        f_course = _norm_inverse(_to_float(e.get("course"), e.get("lane")), course_lo, course_hi)
-        f_st_d = _norm_inverse(_to_float(e.get("st"), 0.2), st_d_lo, st_d_hi)
-        f_adj = _norm_inverse(_to_float(e.get("adjust_weight"), 0.0), adj_lo, adj_hi)
+        ex = e.get("exhibit_info", {})
+
+        f_ex = _norm_inverse(_to_float(ex.get("exhibit_time"), 7.00), ex_lo, ex_hi)
+        f_tilt = 1 - min(abs(_to_float(ex.get("tilt"), 0.0)) / 1.5, 1.0)
+        f_course = _norm_inverse(_to_float(ex.get("course"), e.get("lane")), course_lo, course_hi)
+        f_st_d = _norm_inverse(_to_float(ex.get("st"), 0.2), st_d_lo, st_d_hi)
+        f_adj = _norm_inverse(_to_float(ex.get("adjust_weight"), 0.0), adj_lo, adj_hi)
 
         exhibit_score = (
             W_EX["exhibit_time"]*f_ex +
@@ -374,35 +397,34 @@ def make_feature_table_just(entries: List[Dict[str, Any]], context: Dict[str, An
         if wave > 10:
             mult_weather -= 0.015 * ((wave - 10) / 10)
 
-        # --- 相対風向の方向補正（8方位） ---
-        if rel_wind in ("向かい風", "右向かい風", "左向かい風"):
-            # 向かい系 → イン寄り有利
-            mult_weather += 0.02 * (1 if e.get("course") <= 3 else -0.5)
-        elif rel_wind in ("追い風", "右追い風", "左追い風"):
-            # 追い系 → アウト寄り有利
-            mult_weather += 0.015 * (1 if e.get("course") >= 4 else -0.5)
-        elif rel_wind == "右横風":
-            # 右横風 → スタンドから見て内側がやや有利
-            mult_weather += 0.01 * (1 if e.get("course") <= 2 else -0.5)
-        elif rel_wind == "左横風":
-            # 左横風 → アウト側やや有利
-            mult_weather += 0.01 * (1 if e.get("course") >= 5 else -0.5)
-        elif rel_wind == "斜め風":
-            # 曖昧な表現 → 角度補正で判定
-            if 150 <= rel_angle <= 210:
-                mult_weather += 0.01 * (1 if e.get("course") <= 3 else -0.5)
-            elif 330 <= rel_angle or rel_angle <= 30:
-                mult_weather += 0.01 * (1 if e.get("course") >= 4 else -0.5)
+        # --- course の安全取得（None → lane にフォールバック）
+        course = int(e.get("course") or e.get("lane") or 3)
 
-        # --- 角度の連続補正（真正向かい・真正追いを強調） ---
-        if 150 <= rel_angle <= 210:  # 真向かい
-            mult_weather += 0.01 * (1 if e.get("course") <= 3 else -0.3)
-        elif 330 <= rel_angle or rel_angle <= 30:  # 真追い
-            mult_weather += 0.008 * (1 if e.get("course") >= 4 else -0.3)
+        # --- 相対風向の方向補正（8方位：新ラベル対応） ---
 
-        # --- 強風＋高波時の複合ペナルティ ---
-        if wind > 6 and wave >= 4:
-            mult_weather -= 0.01 * ((wind - 6) * (wave / 4))
+        # 向かい風（イン優位）
+        if rel_wind in (
+            "向かい風（完全）",
+            "斜め向かい風（アウト→イン寄り）",
+            "斜め向かい風（イン→アウト寄り）"
+        ):
+            mult_weather += 0.02 * (1 if course <= 3 else -0.5)
+
+        # 追い風（アウト優位）
+        elif rel_wind in (
+            "追い風（完全）",
+            "斜め追い風（アウト→イン寄り）",
+            "斜め追い風（イン→アウト寄り）"
+        ):
+            mult_weather += 0.015 * (1 if course >= 4 else -0.5)
+
+        # 横風：アウト→イン（イン寄り有利）
+        elif rel_wind == "横風（アウト→イン）":
+            mult_weather += 0.01 * (1 if course <= 2 else -0.5)
+
+        # 横風：イン→アウト（アウト寄り有利）
+        elif rel_wind == "横風（イン→アウト）":
+            mult_weather += 0.01 * (1 if course >= 5 else -0.5)
 
         # --- 安全範囲クランプ ---
         mult_weather = max(min(mult_weather, 1.25), 0.75)

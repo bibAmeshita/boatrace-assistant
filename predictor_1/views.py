@@ -7,7 +7,6 @@ from datetime import datetime
 from predictor_1.features import make_feature_table
 from predictor_1 import rules
 
-
 @csrf_exempt
 def race_predict(request):
     try:

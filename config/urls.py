@@ -34,6 +34,9 @@ urlpatterns = [
     path("predictor_1/", include("predictor_1.urls")),
     path("predictor_2/", include("predictor_2.urls")),
     path("report/", include("report.urls")),
+
+    #API
+    path("api/today_races/", include("today_races.urls")),
 ]
 
 if settings.DEBUG:

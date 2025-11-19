@@ -1,3 +1,5 @@
+# today_races/views.py
+
 from django.http import JsonResponse, HttpResponseBadRequest
 import requests
 from bs4 import BeautifulSoup
