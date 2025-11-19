@@ -8,7 +8,7 @@ from .extractors.entry_table_just import extract_entries_from_racelist_just_html
 import requests
 from requests.adapters import HTTPAdapter, Retry
 from django.views.decorators.csrf import csrf_exempt
-from predictor_1.features import make_feature_table
+from predictor.features import make_feature_table
 from predictor_2.features import make_feature_table_just
 from predictor_2.views import run_race_predict_logic
 
