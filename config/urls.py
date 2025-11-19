@@ -42,13 +42,13 @@ urlpatterns = [
 
     # 各アプリ include
     path("today_race_detail/", include("today_race_detail.urls")),
-    path("predictor_1/", include("predictor_1.urls")),
     path("predictor_2/", include("predictor_2.urls")),
     path("report/", include("report.urls")),
 
     #API
     path("api/", api_root),
     path("api/today_races/", include("today_races.urls")),
+    path("api/race/", include("predictor.urls")),
 ]
 
 if settings.DEBUG:

@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     'ui',
     'today_races',
     'today_race_detail',
-    'predictor_1',
+    'predictor',
     'predictor_2',
     'report',
 ]
