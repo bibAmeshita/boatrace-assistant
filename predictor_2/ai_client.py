@@ -2,7 +2,7 @@
 import os
 from google import genai
 
-GOOGLE_API_KEY = "AIzaSyBjt4lnhgXKTvJ7aY0kvMTFeOGS_DHvhMc"
+GOOGLE_API_KEY = "AIzaSyBjt4lnhgXKTvJ7aY0kvMTFeOGS_DHvhMc" # テスト用ダミーキー
 
 # Google GenAI クライアント初期化
 client = genai.Client(api_key=GOOGLE_API_KEY)
