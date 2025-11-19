@@ -6,6 +6,16 @@ from ui.views import home, config, prediction_1,  prediction_2, media, delete_me
 from today_races import views as tr_views
 from today_race_detail.views import get_race_detail
 
+def api_root(request):
+    return JsonResponse({
+        "status": "ok",
+        "endpoints": [
+            "/api/today_races/all/",
+            "/api/today_races/characters_api/",
+        ]
+    })
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
 
@@ -36,6 +46,7 @@ urlpatterns = [
     path("report/", include("report.urls")),
 
     #API
+    path("api/", api_root),
     path("api/today_races/", include("today_races.urls")),
 ]
 
