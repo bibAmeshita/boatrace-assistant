@@ -7,11 +7,6 @@ class DailyRaceCache(models.Model):
     json_text = models.TextField()
     updated_at = models.DateTimeField(auto_now=True)
 
-class DailyRaceCache(models.Model):
-    date = models.DateField(unique=True)
-    json_text = models.TextField()
-    updated_at = models.DateTimeField(auto_now=True)
-
     @classmethod
     def get_today(cls):
         today = timezone.localdate()
