@@ -33,7 +33,6 @@ def all_races_today(request):
         return JsonResponse(sites, safe=False)
 
     # ⚡ ここから取得開始（キャッシュなし or 古い日付）
-    logger.info("🐍 boatrace.jp からデータ取得開始")
 
     res = requests.get(INDEX_URL, timeout=20)
     res.encoding = "utf-8"
@@ -125,6 +124,15 @@ def fetch_races_from_raceindex(url):
             print("Error parsing race:", e)
 
     return races
+
+
+def api_root(request):
+    return JsonResponse({
+        "status": "ok",
+        "endpoints": [
+            "/api/today_races/all/",
+        ]
+    })
 
 
 def characters_api(request):
