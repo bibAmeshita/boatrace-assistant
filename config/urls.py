@@ -5,6 +5,7 @@ from django.conf.urls.static import static
 from ui.views import home, config, prediction_1,  prediction_2, media, delete_media, result, delete_result, report
 from today_races import views as tr_views
 from today_race_detail.views import get_race_detail
+from django.http import JsonResponse
 
 def api_root(request):
     return JsonResponse({
