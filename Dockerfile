@@ -19,5 +19,6 @@ RUN playwright install --with-deps chromium
 # アプリケーションのコード
 COPY . .
 
-# 環境変数と実行コマンド
-CMD python manage.py runserver 0.0.0.0:$PORT
+# Cloud Run で毎回 SQLite を初期化 → migrate → 実行
+CMD python manage.py migrate --noinput && \
+    python manage.py runserver 0.0.0.0:$PORT
