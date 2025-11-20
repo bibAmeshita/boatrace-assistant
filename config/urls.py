@@ -1,11 +1,12 @@
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from ui.views import home, config, prediction_1,  prediction_2, media, delete_media, result, delete_result, report
-from today_races import views as tr_views
+
+from today_races import views as tr_viewsl
 from today_race_detail.views import get_race_detail
-from django.http import JsonResponse
 
 def api_root(request):
     return JsonResponse({
@@ -36,19 +37,17 @@ urlpatterns = [
     path('prediction-1/', prediction_1, name='prediction_1'),
     path('prediction-2/', prediction_2, name='prediction_2'),
 
-    # 🏁 今日のレース関連API（localStorage方式）
-    path("all_races_today/", tr_views.all_races_today, name="all_races_today"),
-    path("characters_api/", tr_views.characters_api, name="characters_api"),
+    # 🏁 今日のレース関連API（localStorage方式）いらないのでは？？
+    #path("all_races_today/", tr_views.all_races_today, name="all_races_today"),
 
     # 各アプリ include
     path("today_race_detail/", include("today_race_detail.urls")),
-    path("predictor_2/", include("predictor_2.urls")),
     path("report/", include("report.urls")),
 
     #API
     path("api/", api_root),
     path("api/today_races/", include("today_races.urls")),
-    path("api/race/", include("predictor.urls")),
+    path("api/race/detail/", get_race_detail, name="router_race_detail"),
 ]
 
 if settings.DEBUG:
